@@ -1,17 +1,16 @@
 # .github/workflows/gitleaks_slack.yml
-name: Gitleaks Scan and Slack Notify
+name: Gitleaks Scan with Slack Notification
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   gitleaks:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,14 +18,9 @@ jobs:
       - name: Run Gitleaks
         id: gitleaks
         run: |
+          echo "🔍 Running Gitleaks..."
           gitleaks detect --exit-code 1 --report-format sarif --report-path gitleaks.sarif
         continue-on-error: true
-
-      - name: Upload Gitleaks report (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-report
-          path: gitleaks.sarif
 
       - name: Slack Notification if leaks found
         if: steps.gitleaks.outcome == 'failure'
@@ -34,7 +28,13 @@ jobs:
         with:
           payload: |
             {
-              "text": ":rotating_light: *Gitleaks* 탐지됨! 확인해주세요.\n\n저장소: ${{ github.repository }}\nPR: ${{ github.event.pull_request.html_url || github.event.head_commit.url }}\nActor: ${{ github.actor }}"
+              "text": ":rotating_light: *Gitleaks 탐지됨!*\n저장소: ${{ github.repository }}\nURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Fail workflow if leaks found
+        if: steps.gitleaks.outcome == 'failure'
+        run: |
+          echo "🚫 Leak detected. Failing job..."
+          exit 1
