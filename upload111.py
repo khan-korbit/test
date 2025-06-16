@@ -1,4 +1,3 @@
-test
-test
-test
+dbPasswordSTG = "phDHW8De89iqZu"
+
 test
