@@ -2,8 +2,6 @@
 name: Gitleaks Scan with Slack Notification
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
