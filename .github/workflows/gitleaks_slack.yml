@@ -1,38 +1,57 @@
-# .github/workflows/gitleaks_slack.yml
-name: Gitleaks Scan with Slack Notification
+# .github/workflows/gitleaks_baseline.yml
+name: Gitleaks Scan with Baseline & Slack Notify
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
-  gitleaks:
+  gitleaks-check:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ 코드 체크아웃
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Gitleaks
+      # 2️⃣ Baseline 파일 다운로드 (기존 이슈 무시용)
+      - name: Download baseline
+        run: |
+          # baseline.json은 리포지토리에 미리 커밋해 두세요.
+          if [ ! -f ./baseline.json ]; then
+            echo "❗ baseline.json 파일이 없습니다. 처음 스캔 시에는 --create-baseline로 생성 후 커밋하세요."
+            exit 0
+          fi
+
+      # 3️⃣ Gitleaks 스캔 (Baseline 적용)
+      - name: Run Gitleaks with baseline
         id: gitleaks
         run: |
-          echo "🔍 Running Gitleaks..."
-          gitleaks detect --exit-code 1 --report-format sarif --report-path gitleaks.sarif
+          echo "🔍 Running Gitleaks with baseline..."
+          gitleaks detect \
+            --baseline-path baseline.json \
+            --exit-code 1 \
+            --report-format sarif \
+            --report-path gitleaks.sarif
         continue-on-error: true
 
-      - name: Slack Notification if leaks found
+      # 4️⃣ Slack 알림 (신규 이슈 발견 시)
+      - name: Notify Slack on new leaks
         if: steps.gitleaks.outcome == 'failure'
-        uses: slackapi/slack-github-action@v1.24.0
+        uses: slackapi/slack-github-action@v2.1.0
         with:
           payload: |
             {
-              "text": ":rotating_light: *Gitleaks 탐지됨!*\n저장소: ${{ github.repository }}\nURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":rotating_light: *[Gitleaks] 신규 민감 정보 탐지!* :lock:\n• 저장소: `${{ github.repository }}`\n• 실행 URL: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Fail workflow if leaks found
+      # 5️⃣ 워크플로 실패 처리 (머지 차단)
+      - name: Block merge on new leaks
         if: steps.gitleaks.outcome == 'failure'
         run: |
-          echo "🚫 Leak detected. Failing job..."
+          echo "🚫 New leaks detected. Failing workflow to block merge."
           exit 1
