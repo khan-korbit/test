@@ -1,0 +1,40 @@
+# .github/workflows/gitleaks_slack.yml
+name: Gitleaks Scan and Slack Notify
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gitleaks
+        id: gitleaks
+        run: |
+          gitleaks detect --exit-code 1 --report-format sarif --report-path gitleaks.sarif
+        continue-on-error: true
+
+      - name: Upload Gitleaks report (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks.sarif
+
+      - name: Slack Notification if leaks found
+        if: steps.gitleaks.outcome == 'failure'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": ":rotating_light: *Gitleaks* 탐지됨! 확인해주세요.\n\n저장소: ${{ github.repository }}\nPR: ${{ github.event.pull_request.html_url || github.event.head_commit.url }}\nActor: ${{ github.actor }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
