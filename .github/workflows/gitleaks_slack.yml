@@ -32,3 +32,7 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Fail workflow if leaks found
+        if: steps.gitleaks.outcome == 'failure'
+        run: exit 1
