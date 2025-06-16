@@ -37,4 +37,4 @@ jobs:
         if: steps.gitleaks.outcome == 'failure'
         run: |
           echo "🚫 Leak detected. Failing job..."
-          exit 1
+          uses: andymckay/cancel-action@0.2
