@@ -1,11 +1,11 @@
-# .github/workflows/gitleaks_baseline.yml
-name: Gitleaks Scan with Baseline & Slack Notify
+name: Gitleaks Scan
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    branches: [main]
+    branches: [ main ] # main 브랜치로의 PR에 대해서만 실행
+  # push 이벤트는 main 브랜치 병합 시에만 스캔하도록 제한하는 것이 좋습니다.
+  # push:
+  #   branches: [ main ]
 
 jobs:
   gitleaks:
@@ -13,27 +13,45 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        # PR의 모든 커밋을 가져와야 비교가 가능하므로 fetch-depth는 0으로 유지합니다.
         with:
-          fetch-depth: 0 # 전체 Git 히스토리를 가져와 스캔
+          fetch-depth: 0
 
-      - name: Run Gitleaks
+      - name: Setup Gitleaks baseline
+        # main 브랜치에 있는 베이스라인 파일을 사용합니다.
+        # PR 타겟 브랜치가 main이 아닐 경우, 'origin/${{ github.base_ref }}' 등으로 수정할 수 있습니다.
+        run: |
+          git checkout origin/main -- gitleaks-baseline.json
+          if [ ! -f gitleaks-baseline.json ]; then
+            echo "Baseline file not found. Creating an empty one to prevent errors."
+            echo "[]" > gitleaks-baseline.json
+          fi
+
+      - name: Run Gitleaks Scan on Pull Request
         id: gitleaks
         uses: gitleaks/gitleaks-action@v2
-        # Gitleaks가 유출을 탐지하면 non-zero exit code를 반환하여 이 스텝은 실패합니다.
-        # 실패 시 이후 스텝(Slack 알림)이 조건부로 실행됩니다.
+        with:
+          # 베이스라인 파일을 기준으로 새로운 탐지 건만 보고하도록 설정
+          config_path: .gitleaks.toml # (선택사항) 별도의 gitleaks 설정 파일이 있다면 지정
+          baseline_path: gitleaks-baseline.json
+        # 이 스텝은 새로운 탐지 건이 있을 때만 실패합니다.
 
       - name: Gitleaks scan passed
         if: success()
-        run: echo "✅ Gitleaks scan passed. No leaks found."
+        run: echo "✅ Gitleaks scan passed. No new leaks found."
 
       - name: Send Slack notification on failure
         if: failure()
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "🚨 Gitleaks Alert: Secrets Detected!"
-          SLACK_MESSAGE: "A Gitleaks scan detected potential secrets in a recent commit. Please review the findings and take immediate action."
-          SLACK_COLOR: 'danger' # 또는 16진수 색상 코드
+          SLACK_TITLE: "🚨 Gitleaks Alert: New Secrets Detected in PR!"
+          SLACK_MESSAGE: |
+            A Gitleaks scan detected potential new secrets in Pull Request #${{ github.event.pull_request.number }}.
+            Author: @${{ github.actor }}
+            Please review the findings in the 'Gitleaks Scan' check and take immediate action.
+            PR Link: ${{ github.event.pull_request.html_url }}
+          SLACK_COLOR: 'danger'
           SLACK_USERNAME: "Gitleaks Bot"
           SLACK_ICON_EMOJI: ":gitleaks:"
           MSG_MINIMAL: true
