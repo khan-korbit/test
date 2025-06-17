@@ -32,7 +32,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         with:
           # 베이스라인 파일을 기준으로 새로운 탐지 건만 보고하도록 설정
-          config_path: .gitleaks.toml # (선택사항) 별도의 gitleaks 설정 파일이 있다면 지정
           baseline_path: gitleaks-baseline.json
         # 이 스텝은 새로운 탐지 건이 있을 때만 실패합니다.
 
